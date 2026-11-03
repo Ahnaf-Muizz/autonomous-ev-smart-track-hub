@@ -1,5 +1,6 @@
 # Autonomous mBot Mega EV Rover & Smart Dual-Gate Track Hub
 ### Texas Tech University — Smart Human-centric Automation Resilience (SHARE) Lab
+**Developed by:** **Ahnaf Muizz Chowdhury**, Computer Engineering Undergraduate Student under the SHARE Lab.
 
 [![GitHub License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![React 19](https://img.shields.io/badge/React-19.0-61dafb.svg?logo=react)](https://react.dev/)
@@ -385,6 +386,6 @@ autonomous-ev-smart-track-hub/
 
 ## 7. License & Credits
 
-Developed by the **Smart Human-centric Automation Resilience (SHARE) Lab** at **Texas Tech University**.
+Developed by **Ahnaf Muizz Chowdhury**, Computer Engineering undergraduate student under the **Smart Human-centric Automation Resilience (SHARE) Lab** at **Texas Tech University**.
 
 Distributed under the MIT License. Contributions and educational usage are welcome!

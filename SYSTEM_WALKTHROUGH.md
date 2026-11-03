@@ -1,6 +1,7 @@
 # Texas Tech University — Smart Human-centric Automation Resilience (SHARE) Lab
 # Autonomous mBot Mega EV Rover & Smart Dual-Gate Track Hub
 ## Complete Subsystem Walkthrough, Hardware Assembly, Wireless Setup, and Dashboard Navigation Tutorial
+**Developed by:** Ahnaf Muizz Chowdhury, Computer Engineering Undergraduate Student, SHARE Lab
 
 ---
 
@@ -721,4 +722,5 @@ The SHARE Lab EV Rover Track Hub serves as an integrated teaching tool for grade
 ---
 
 *Texas Tech University — Smart Human-centric Automation Resilience (SHARE) Lab*  
+*Developed by Ahnaf Muizz Chowdhury, Computer Engineering Undergraduate Student*  
 *Document Version: 3.0 — October 2026*
