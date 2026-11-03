@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EV Rover Lab — mBot Mega &amp; Battery Supercharger</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+  <!-- ========================================================================
+       GLOBAL PAUSE / ALL-STOP OVERLAY (Controlled from Page 2 Master Console)
+       ======================================================================== -->
+  <div class="pause-overlay" id="globalPauseOverlay">
+    <div class="po-ico" id="pauseOverlayIcon">⏸️</div>
+    <h2 id="pauseOverlayTitle">Station Paused by Table Host</h2>
+    <p id="pauseOverlaySub">
+      Hold tight! The table host is resetting or aligning the rover on the track.
+    </p>
+  </div>
+
+  <!-- ========================================================================
+       STICKY TOPBAR
+       ======================================================================== -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">⚡</div>
+      <div>
+        <div class="brand-name">EV Rover Lab</div>
+        <div class="brand-sub">Texas Tech SHARE Lab · Family STEM Night</div>
+      </div>
+    </div>
+
+    <!-- 4-Step Mission Progress Stepper (Visible on Page 1) -->
+    <ol class="stepper" id="missionStepper">
+      <li class="current" id="stepNav1">
+        <div class="step-pill">
+          <span class="step-num">1</span>
+          <span class="step-label">Launch</span>
+        </div>
+      </li>
+      <li id="stepNav2">
+        <div class="step-pill">
+          <span class="step-num">2</span>
+          <span class="step-label">Gate 1</span>
+        </div>
+      </li>
+      <li id="stepNav3">
+        <div class="step-pill">
+          <span class="step-num">3</span>
+          <span class="step-label">Supercharge</span>
+        </div>
+      </li>
+      <li id="stepNav4">
+        <div class="step-pill">
+          <span class="step-num">4</span>
+          <span class="step-label">Finish</span>
+        </div>
+      </li>
+    </ol>
+
+    <div class="top-actions">
+      <div class="chip" title="Total Rovers Detected by Gate 1 Ultrasonic Sensor">
+        🚗 Cars Counted <b id="p1CarCountBadge">0</b>
+      </div>
+      <button type="button" class="icon-btn" onclick="openRoverExplorer(null)">
+        🔍 Inspect mBot Mega
+      </button>
+      <div class="conn-dots" title="Hardware Status: Server · ESP32 Gate · mBot BLE">
+        <span class="conn-dot" id="dotServer" title="Multi-PC Sync Server"></span>
+        <span class="conn-dot" id="dotEsp32" title="ESP32 Gate WebSocket"></span>
+        <span class="conn-dot" id="dotBle" title="mBot Mega Web Bluetooth"></span>
+      </div>
+      <button type="button" class="icon-btn" id="navSwitchBtn" onclick="togglePageRoute()">
+        🛠️ Host Console
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================
+       PAGE 1: STUDENT INTERACTIVE MISSION EXPERIENCE (/)
+       ======================================================================== -->
+  <main class="page active" id="page1">
+    <div class="p1">
+
+      <!-- LEFT COLUMN: INTERACTIVE CIRCULAR TRACK STAGE -->
+      <section class="card stage">
+        <canvas id="trackCanvas"></canvas>
+
+        <!-- Floating Minimal Glass HUD -->
+        <div class="stage-hud">
+          <div class="glass hud-player">
+            Driver: <b id="hudDriverName">Ready for Next Student</b>
+          </div>
+          <div class="glass hud-timer">
+            <div class="lbl">Lap Timer</div>
+            <div class="val"><span id="lapClockVal">0.0</span><small>s</small></div>
+          </div>
+        </div>
+
+        <!-- Bottom Floating Status Pill -->
+        <div class="glass stage-caption">
+          <span class="status-dot" id="stageStatusDot"></span>
+          <span id="stageCaptionText">Place rover on the Start Line and press Start Mission</span>
+        </div>
+      </section>
+
+      <!-- RIGHT COLUMN: STEP-BY-STEP FOCUSED MISSION PANEL -->
+      <aside class="card mission">
+
+        <!-- ==================================================================
+             STEP 1: LAUNCH MISSION
+             ================================================================== -->
+        <div class="view active" id="viewStep1">
+          <div>
+            <div class="eyebrow">Step 1 of 4 · Ready at Start Line</div>
+            <h1 class="h-title">Drive &amp; Supercharge the EV Rover</h1>
+          </div>
+          <p class="lead">
+            Guide our autonomous <b>Makeblock mBot Mega</b> around the track, pass the ultrasonic traffic gate, and fast-charge its Lithium-Ion battery without overheating!
+          </p>
+
+          <div>
+            <label class="field-label" for="studentNameInput">Your First Name or Team Name</label>
+            <input
+              type="text"
+              id="studentNameInput"
+              class="field"
+              placeholder="e.g., Alex or Team Rocket"
+              maxlength="24"
+              style="margin-top:6px;"
+            />
+          </div>
+
+          <ul class="howto">
+            <li>
+              <div class="howto-ico">🛞</div>
+              <div>
+                <b>1. Autonomous Launch &amp; Ultrasonic Gate 1</b>
+                <small>Infrared sensors keep the rover inside the black borders while Gate 1's sonar counts your car.</small>
+              </div>
+            </li>
+            <li>
+              <div class="howto-ico">⚡</div>
+              <div>
+                <b>2. 10-Second EV Supercharger Challenge</b>
+                <small>Pick the right charging current (mA) to reach 100% in time while keeping Core Temp under 61.9°C.</small>
+              </div>
+            </li>
+            <li>
+              <div class="howto-ico">🌈</div>
+              <div>
+                <b>3. Sprint to the Finish Line</b>
+                <small>Gate 2 opens automatically so your rover crosses the black finish line for a 7s rainbow celebration!</small>
+              </div>
+            </li>
+          </ul>
+
+          <div class="spacer"></div>
+
+          <button type="button" class="btn btn-primary btn-xl" id="btnStartMission" onclick="startStudentMission()">
+            🚀 Start Rover Mission
+          </button>
+        </div>
+
+        <!-- ==================================================================
+             STEP 2: AUTONOMOUS DRIVE & ULTRASONIC GATE 1
+             ================================================================== -->
+        <div class="view" id="viewStep2">
+          <div>
+            <div class="eyebrow" id="step2Eyebrow">Step 2 of 4 · Autonomous Navigation</div>
+            <h2 class="h-title" id="step2Title">Cruising to Ultrasonic Gate 1</h2>
+          </div>
+
+          <div class="drv-hero">
+            <div class="drv-ring" id="step2HeroRing">🤖</div>
+          </div>
+
+          <p class="lead center" id="step2Lead">
+            The rover is scanning the white road with its dual infrared line sensors (Pins A6 &amp; A7) and heading toward Gate 1.
+          </p>
+
+          <div class="tipcard">
+            <div class="tip-ico">📡</div>
+            <div>
+              <b id="step2TipTitle">How does Gate 1 know the rover is arriving?</b>
+              <p id="step2TipBody">
+                Gate 1's HC-SR04 Ultrasonic Sensor fires 40 kHz sound pulses. When the echo bounces back from less than 5 cm away, it adds +1 to the Car Count and cycles Red → Yellow → Green!
+              </p>
+            </div>
+          </div>
+
+          <div class="spacer"></div>
+
+          <!-- Helpful host/student progression button when running in simulation or if rover reaches station -->
+          <div class="row-between">
+            <button type="button" class="btn btn-ghost" onclick="openRoverExplorer('linesensors')">
+              🔍 See How IR Sensors Work
+            </button>
+            <button type="button" class="btn btn-primary" id="btnSimDockNow" onclick="arriveAtChargingStation()">
+              ⚡ Dock at Charger Now →
+            </button>
+          </div>
+        </div>
+
+        <!-- ==================================================================
+             STEP 3: 10-SECOND EV BATTERY SUPERCHARGER GAME
+             ================================================================== -->
+        <div class="view" id="viewStep3">
+          <div class="row-between">
+            <div>
+              <div class="eyebrow">Step 3 of 4 · EV Supercharger Bay</div>
+              <h2 class="h-title sm">Charge 20% → 100% in <span class="hl" id="targetMinutesBadge">30 min</span></h2>
+            </div>
+            <div class="seg" title="Difficulty Presets">
+              <button type="button" class="active" id="diffBtnEasy" onclick="setDifficultyMode('easy')">Guided</button>
+              <button type="button" id="diffBtnPro" onclick="setDifficultyMode('pro')">Challenge</button>
+            </div>
+          </div>
+
+          <!-- High-DPI Cutaway Battery Cell & Core Temp Visualizer -->
+          <div class="viz">
+            <canvas id="batteryAnimCanvas"></canvas>
+          </div>
+
+          <!-- Clean Current (mA) Selector Control -->
+          <div class="amp-control">
+            <div class="amp-top">
+              <span class="amp-label">Charging Current Input (mA)</span>
+              <span class="zone ok" id="ampZoneBadge">Sweet Spot Zone</span>
+            </div>
+
+            <div class="amp-readout-row">
+              <button type="button" class="step-btn" onclick="stepCurrentMa(-100)" title="-100 mA">−</button>
+              <div class="amp-readout">
+                <input
+                  type="number"
+                  id="currentMaInput"
+                  min="500"
+                  max="8000"
+                  step="50"
+                  value="3680"
+                  oninput="syncCurrentSliderFromInput()"
+                />
+                <small>mA</small>
+              </div>
+              <button type="button" class="step-btn" onclick="stepCurrentMa(100)" title="+100 mA">+</button>
+            </div>
+
+            <input
+              type="range"
+              id="currentMaSlider"
+              class="amp-slider"
+              min="500"
+              max="8000"
+              step="50"
+              value="3680"
+              oninput="syncCurrentInputFromSlider()"
+            />
+            <div class="amp-scale">
+              <span>500 mA (Slow / Cool)</span>
+              <span id="sweetSpotHintLabel">Target: ~3,680 mA</span>
+              <span>8,000 mA (Overheats!)</span>
+            </div>
+          </div>
+
+          <!-- Outcome Banner (Shown after 10s charge or if failed) -->
+          <div class="result" id="chargeResultBanner" hidden>
+            <div class="r-ico" id="chargeResultIcon">✅</div>
+            <div>
+              <b id="chargeResultTitle">100% Charged Safely!</b>
+              <p id="chargeResultText">Peak Core Temp stayed safe. Gate 2 is opening!</p>
+            </div>
+          </div>
+
+          <!-- Primary Action Button -->
+          <button type="button" class="btn btn-energy btn-xl" id="btnRunSupercharge" onclick="runSuperchargeSimulation()">
+            ⚡ Start 10-Second Supercharge
+          </button>
+
+          <!-- Progressive Disclosure: Formula & Live Physics Graph tucked neatly inside -->
+          <details class="disclosure" id="scienceDisclosure">
+            <summary>📐 Show the battery math &amp; live temperature curves</summary>
+            <div class="disc-body">
+              <div>
+                To fill <b>80%</b> of our <b>2,300 mAh</b> cell (<b>1,840 mAh</b> needed) within <b id="formulaMinSpan">30 min</b> (<b id="formulaHrSpan">0.50 hr</b>), use:
+              </div>
+              <code class="formula" id="formulaCalcBox">
+                I = 1,840 mAh ÷ 0.50 hr = 3,680 mA  (Keep Core T1 &lt; 61.9°C!)
+              </code>
+              <div class="chart-box">
+                <canvas id="liveChargeChartCanvas"></canvas>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- ==================================================================
+             STEP 4: FINISH LINE & 7-SECOND RAINBOW CELEBRATION
+             ================================================================== -->
+        <div class="view" id="viewStep4">
+          <div class="finish-burst">🏆</div>
+          <div class="center">
+            <div class="eyebrow">Step 4 of 4 · Lap Complete!</div>
+            <h2 class="h-title" id="finishTitleBanner">Awesome Job, Driver!</h2>
+          </div>
+
+          <div class="finish-time">
+            <span id="finishLapTimeVal">24.8</span><small>s</small>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat">
+              <div class="s-val" id="finishStatCurrent">3,680 mA</div>
+              <div class="s-lbl">Charge Current</div>
+            </div>
+            <div class="stat">
+              <div class="s-val" id="finishStatTemp">48.2°C</div>
+              <div class="s-lbl">Peak Core T1</div>
+            </div>
+            <div class="stat">
+              <div class="s-val" id="finishStatSoc">100%</div>
+              <div class="s-lbl">Final Battery</div>
+            </div>
+          </div>
+
+          <div class="tipcard">
+            <div class="tip-ico">🌈</div>
+            <div>
+              <b id="finishRainbowStatusTitle">7-Second Chasing Rainbow Celebration Active!</b>
+              <p id="finishRainbowStatusSub">
+                Both line sensors (A6 &amp; A7) detected the black finish line, cleared onto the white road, and triggered individual-LED rainbow waves. Gate 1's timer is reset for the next student!
+              </p>
+            </div>
+          </div>
+
+          <div class="spacer"></div>
+
+          <button type="button" class="btn btn-primary btn-xl" onclick="resetForNextStudent()">
+            🔄 Ready for Next Student
+          </button>
+        </div>
+
+      </aside>
+
+      <!-- ====================================================================
+           BOTTOM ROW: EXPLORE THE SCIENCE + FASTEST LAP LEADERBOARD
+           ==================================================================== -->
+      <section class="below">
+
+        <!-- Left: 4 Interactive STEM Cards -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="eyebrow">Interactive STEM Exhibits</div>
+              <h3>Tap Any Part to Explore How It Works</h3>
+            </div>
+            <button type="button" class="btn btn-ghost" onclick="openRoverExplorer(null)" style="padding:8px 14px; font-size:13px;">
+              🤖 Open Full Rover Anatomy
+            </button>
+          </div>
+
+          <div class="learn-grid">
+            <button type="button" class="learn-tile" onclick="openRoverExplorer(null)">
+              <div class="lt-ico">🤖</div>
+              <b>mBot Mega Anatomy</b>
+              <small>Click the rover's 7 sensors, Mecanum wheels, RGB pods &amp; MegaPi brain.</small>
+            </button>
+
+            <button type="button" class="learn-tile" onclick="openStemPopup('ultrasonic')">
+              <div class="lt-ico">📡</div>
+              <b>Ultrasonic Gate 1</b>
+              <small>See how 40 kHz sound echoes measure distance and trigger the traffic light.</small>
+            </button>
+
+            <button type="button" class="learn-tile" onclick="openStemPopup('battery')">
+              <div class="lt-ico">🔋</div>
+              <b>Li-Ion Cell &amp; OCV</b>
+              <small>Learn how mAh capacity, current (mA), and open-circuit voltage work.</small>
+            </button>
+
+            <button type="button" class="learn-tile" onclick="openStemPopup('thermal')">
+              <div class="lt-ico">🌡️</div>
+              <b>Why Batteries Heat Up</b>
+              <small>Explore Joule heating (I²R) and 3-node liquid cooling physics.</small>
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Fastest Laps Scorecard -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="eyebrow">STEM Night Leaderboard</div>
+              <h3>🏆 Fastest Completed Laps</h3>
+            </div>
+          </div>
+          <div class="lb-list" id="p1LeaderboardList">
+            <div class="lb-empty">Complete a lap to claim the #1 spot on the leaderboard!</div>
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ========================================================================
+       PAGE 2: MASTER MANUAL OVERRIDE & PHYSICS ANALYTICS CONSOLE (/master)
+       ======================================================================== -->
+  <main class="page" id="page2">
+    <div class="p2">
+
+      <!-- Password Gate (Password: mbot26) -->
+      <div class="card login-card" id="masterLoginBox">
+        <div class="lc-ico">🔐</div>
+        <h2>Table Host Master Console</h2>
+        <p>Enter the table host password to unlock direct Web Bluetooth manual driving, emergency all-stop, and per-game battery physics graphs.</p>
+        <form onsubmit="submitMasterLogin(event)">
+          <input
+            type="password"
+            id="masterPasswordInput"
+            class="field"
+            placeholder="Enter password..."
+            autocomplete="off"
+          />
+          <div class="login-err" id="masterLoginError" hidden>Incorrect password. Try again.</div>
+          <button type="submit" class="btn btn-primary btn-xl" style="margin-top:14px;">
+            Unlock Host Console
+          </button>
+        </form>
+      </div>
+
+      <!-- Unlocked Master Content -->
+      <div id="masterConsoleContent" hidden>
+
+        <!-- Emergency All-Stop & Global Station Bar -->
+        <div class="estop-bar">
+          <div>
+            <div class="eb-title">🛡️ Master Station Override &amp; Multi-PC Sync</div>
+            <div class="eb-sub">
+              Student Kiosk URL (Same Wi-Fi / Hotspot): <b id="lanUrlDisplay">https://localhost:8443/</b>
+            </div>
+          </div>
+          <div class="eb-btns">
+            <button type="button" class="btn btn-stop" onclick="triggerMasterAllStop()">
+              🛑 ALL-STOP (Rover + Gates + Page 1)
+            </button>
+            <button type="button" class="btn btn-pause" id="btnMasterPauseToggle" onclick="toggleMasterPause()">
+              ⏸️ Pause Station
+            </button>
+            <button type="button" class="btn btn-outline" onclick="masterResetLapAndGate1()">
+              🔄 Reset Lap &amp; Gate 1 Timer
+            </button>
+          </div>
+        </div>
+
+        <!-- 3-Column Hardware Control Grid -->
+        <div class="m-grid">
+
+          <!-- Column 1: Direct Web Bluetooth mBot Mega Control (Mode 2) -->
+          <div class="card m-card">
+            <div class="row-between">
+              <h3>🤖 mBot Mega Direct BLE Control</h3>
+              <button type="button" class="m-btn go" id="btnConnectBle" onclick="connectMbotBle()">
+                📶 Connect BLE
+              </button>
+            </div>
+
+            <div class="m-sub">Operating Mode &amp; Calibration</div>
+            <div class="m-row">
+              <button type="button" class="m-btn" id="btnMode1" onclick="sendMbotChar('1')">
+                Mode 1 · Auto Line
+              </button>
+              <button type="button" class="m-btn" id="btnMode2" onclick="sendMbotChar('2')">
+                Mode 2 · Manual
+              </button>
+              <button type="button" class="m-btn" onclick="sendMbotChar('c')">
+                Calibrate ('c')
+              </button>
+            </div>
+
+            <div class="m-sub">Mecanum Drive Pad (Hold Key or Button)</div>
+            <div class="pad">
+              <button type="button" class="m-btn" data-drive="q">↺<small>Q · CCW</small></button>
+              <button type="button" class="m-btn" data-drive="w">▲<small>W · Fwd</small></button>
+              <button type="button" class="m-btn" data-drive="e">↻<small>E · CW</small></button>
+              <button type="button" class="m-btn" data-drive="a">◄<small>A · Strafe L</small></button>
+              <button type="button" class="m-btn halt" onclick="sendMbotChar(' ')">■<small>Space · Halt</small></button>
+              <button type="button" class="m-btn" data-drive="d">►<small>D · Strafe R</small></button>
+              <div></div>
+              <button type="button" class="m-btn" data-drive="s">▼<small>S · Back</small></button>
+              <div></div>
+            </div>
+
+            <div class="m-sub">Speed Preset (1 = Slow · 5 = Fast · 9 = Max)</div>
+            <div class="m-row">
+              <button type="button" class="m-btn" onclick="sendMbotChar('1')">1</button>
+              <button type="button" class="m-btn" onclick="sendMbotChar('3')">3</button>
+              <button type="button" class="m-btn" onclick="sendMbotChar('5')">5</button>
+              <button type="button" class="m-btn" onclick="sendMbotChar('7')">7</button>
+              <button type="button" class="m-btn" onclick="sendMbotChar('9')">9</button>
+            </div>
+
+            <div class="m-sub">Charging &amp; Finish LED States</div>
+            <div class="m-row">
+              <button type="button" class="m-btn" onclick="sendMbotChar('c')">Cyan Ready</button>
+              <button type="button" class="m-btn" onclick="sendMbotChar('g')">Green Charge</button>
+              <button type="button" class="m-btn" onclick="sendMbotChar('v')">Solid Charged</button>
+              <button type="button" class="m-btn" onclick="sendMbotChar('f')">Red Fail</button>
+              <button type="button" class="m-btn" onclick="sendMbotChar('r')">Rainbow</button>
+            </div>
+          </div>
+
+          <!-- Column 2: ESP32 Dual-Gate & Car Counter Controller -->
+          <div class="card m-card">
+            <div class="row-between">
+              <h3>🚧 ESP32 Gate &amp; Ultrasonic Telemetry</h3>
+              <span class="chip" id="esp32ConnChip">Offline</span>
+            </div>
+
+            <div class="m-sub">ESP32 WebSocket Endpoint</div>
+            <div class="m-row">
+              <input
+                type="text"
+                id="esp32IpInput"
+                class="m-input"
+                value="192.168.137.169:81"
+                placeholder="192.168.137.169:81"
+              />
+              <button type="button" class="m-btn go" onclick="connectEsp32Gate()">Connect</button>
+            </div>
+
+            <div class="m-sub">Live Traffic Light &amp; Car Count</div>
+            <div class="gate-viz">
+              <div class="tl">
+                <i class="r on" id="tlRed"></i>
+                <i class="y" id="tlYellow"></i>
+                <i class="g" id="tlGreen"></i>
+              </div>
+              <div style="flex:1;">
+                <div class="eyebrow">Total Cars Counted</div>
+                <div class="big-count" id="p2CarCountVal">0</div>
+                <div style="font-size:12px; color:var(--muted); margin-top:4px;">
+                  Gate 1 Lockout: <b id="gate1LockoutText">Ready (0s)</b>
+                </div>
+                <div class="bar"><div id="gate1LockoutBar"></div></div>
+              </div>
+            </div>
+
+            <div class="kv-grid" style="margin-top:10px;">
+              <div class="kv"><span>Ultrasonic</span><b id="kvUltrasonic">-- cm</b></div>
+              <div class="kv"><span>Gate State</span><b id="kvGateState">IDLE</b></div>
+            </div>
+
+            <div class="m-sub">Barrier Servo Overrides</div>
+            <div class="m-row">
+              <button type="button" class="m-btn go" onclick="sendEsp32Cmd('OPEN_GATE1')">Open Gate 1</button>
+              <button type="button" class="m-btn" onclick="sendEsp32Cmd('CLOSE_GATE1')">Close Gate 1</button>
+            </div>
+            <div class="m-row" style="margin-top:8px;">
+              <button type="button" class="m-btn go" onclick="sendEsp32Cmd('CHARGED')">Open Gate 2</button>
+              <button type="button" class="m-btn" onclick="sendEsp32Cmd('RESET_LOCKOUT')">Reset G1 Timer</button>
+            </div>
+            <div class="m-row" style="margin-top:8px;">
+              <button type="button" class="m-btn" onclick="sendEsp32Cmd('RESET_GATES')">Close Both Gates</button>
+              <button type="button" class="m-btn danger" onclick="resetCarCountAll()">Zero Car Count</button>
+            </div>
+          </div>
+
+          <!-- Column 3: Leaderboard & Quick Stage Controls -->
+          <div class="card m-card">
+            <div class="row-between">
+              <h3>🏆 Leaderboard &amp; Stage Manager</h3>
+              <button type="button" class="m-btn danger" style="flex:0;" onclick="clearAllLeaderboard()">
+                Clear All
+              </button>
+            </div>
+
+            <div class="m-sub">Jump Page 1 to Stage</div>
+            <div class="m-row">
+              <button type="button" class="m-btn" onclick="setStudentStep(1)">1. Launch</button>
+              <button type="button" class="m-btn" onclick="setStudentStep(2)">2. Gate 1</button>
+              <button type="button" class="m-btn" onclick="setStudentStep(3)">3. Charge</button>
+              <button type="button" class="m-btn" onclick="setStudentStep(4)">4. Finish</button>
+            </div>
+
+            <div class="m-sub">Recorded Lap Times</div>
+            <div style="max-height:285px; overflow-y:auto;">
+              <table class="m-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Student</th>
+                    <th>Lap</th>
+                    <th>Current</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="p2LeaderboardBody">
+                  <tr><td colspan="5" style="color:var(--muted); text-align:center; padding:18px;">No laps recorded yet</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Stored Per-Game Battery Dynamics & 4-Graph Physics Inspector -->
+        <section class="card history-card">
+          <div class="row-between">
+            <div>
+              <div class="eyebrow">Coupled Electro-Thermal Physics Archive (server/battery_physics.py)</div>
+              <h3 style="margin:4px 0 0; font-size:19px;">📈 Stored Per-Game Battery Dynamics &amp; Graph Inspector</h3>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="m-btn" onclick="loadGameHistoryList()">🔄 Refresh Runs</button>
+              <button type="button" class="m-btn danger" onclick="clearAllGameHistory()">🗑️ Clear History</button>
+            </div>
+          </div>
+
+          <div class="history-controls">
+            <select id="gameHistorySelect" class="m-select" onchange="onSelectStoredGame()">
+              <option value="">Select a recorded student charging run...</option>
+            </select>
+            <div class="kv">
+              <span>Python Equations</span>
+              <b>dSOC/dt = I/(3600·C) · dT1/dt · dT2/dt</b>
+            </div>
+            <button type="button" class="m-btn go" onclick="runQuickDemoPhysicsOnMaster()">
+              ⚡ Generate Sample Run
+            </button>
+          </div>
+
+          <div class="history-meta" id="historyMetaBar">
+            <span class="meta-chip">Run a charging game on Page 1 (or click "Generate Sample Run") to inspect its 4 coupled differential equation curves.</span>
+          </div>
+
+          <div class="history-graphs">
+            <div class="chart-box"><canvas id="histChartSoc"></canvas></div>
+            <div class="chart-box"><canvas id="histChartTemp"></canvas></div>
+            <div class="chart-box"><canvas id="histChartVolt"></canvas></div>
+            <div class="chart-box"><canvas id="histChartHeat"></canvas></div>
+          </div>
+        </section>
+
+        <!-- Expandable Raw Hardware Telemetry Console -->
+        <details class="card disclosure console-card">
+          <summary>🖥️ Live Hardware Serial &amp; WebSocket Telemetry Log</summary>
+          <pre id="masterTerminal">[SYS] EV Rover Lab Master Console initialized. Waiting for hardware events...</pre>
+        </details>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================================================
+       MODAL 1: 2-LEVEL INTERACTIVE mBot MEGA HARDWARE EXPLORER
+       ======================================================================== -->
+  <div class="modal-backdrop" id="roverExplorerModal" onclick="if(event.target===this) closeRoverExplorer()">
+    <div class="modal explorer-modal">
+      <button type="button" class="modal-close" onclick="closeRoverExplorer()" title="Close">✕</button>
+
+      <!-- Left Column: Interactive Illustrated Makeblock mBot Mega Diagram -->
+      <div class="ex-stage">
+        <div class="ex-stage-head">
+          <div class="eyebrow">Interactive Hardware Anatomy · Level 1 &amp; Level 2</div>
+          <h2>Makeblock mBot Mega (ATmega2560)</h2>
+          <p>Click any numbered sensor, wheel, or circuit board on the rover to test how it works!</p>
+        </div>
+
+        <div class="ex-canvas-wrap">
+          <div class="ex-svg-box" id="exSvgBox">
+            <svg viewBox="0 0 640 480" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <radialGradient id="chassisGlow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="#5b8cff" stop-opacity="0.22" />
+                  <stop offset="100%" stop-color="#0d1326" stop-opacity="0" />
+                </radialGradient>
+                <linearGradient id="metalChassis" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#283556" />
+                  <stop offset="100%" stop-color="#151d36" />
+                </linearGradient>
+                <linearGradient id="megapiRed" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#ef4444" />
+                  <stop offset="100%" stop-color="#991b1b" />
+                </linearGradient>
+              </defs>
+
+              <!-- Ambient floor glow -->
+              <ellipse cx="320" cy="245" rx="220" ry="185" fill="url(#chassisGlow)" />
+
+              <!-- Forward direction indicator at top -->
+              <path d="M 320 26 L 308 42 L 332 42 Z" fill="rgba(91,140,255,0.45)" />
+              <text x="320" y="20" text-anchor="middle" fill="#8c95b5" font-size="10" font-weight="800" letter-spacing="1.5">FRONT NOSE</text>
+
+              <!-- ============================================================
+                   PART 1: 4x MECANUM OMNIDIRECTIONAL WHEELS (data-part="mecanum")
+                   ============================================================ -->
+              <g class="part" data-part="mecanum" onclick="selectRoverPart('mecanum')">
+                <!-- Front-Left Wheel -->
+                <g transform="translate(175, 110)">
+                  <rect x="-24" y="-42" width="48" height="84" rx="10" fill="#1b243d" stroke="#7c93c9" stroke-width="2" />
+                  <line x1="-18" y1="-28" x2="18" y2="-10" stroke="#9fb3e0" stroke-width="3" />
+                  <line x1="-18" y1="-8"  x2="18" y2="10"  stroke="#9fb3e0" stroke-width="3" />
+                  <line x1="-18" y1="12"  x2="18" y2="30"  stroke="#9fb3e0" stroke-width="3" />
+                </g>
+                <!-- Front-Right Wheel -->
+                <g transform="translate(465, 110)">
+                  <rect x="-24" y="-42" width="48" height="84" rx="10" fill="#1b243d" stroke="#7c93c9" stroke-width="2" />
+                  <line x1="18" y1="-28" x2="-18" y2="-10" stroke="#9fb3e0" stroke-width="3" />
+                  <line x1="18" y1="-8"  x2="-18" y2="10"  stroke="#9fb3e0" stroke-width="3" />
+                  <line x1="18" y1="12"  x2="-18" y2="30"  stroke="#9fb3e0" stroke-width="3" />
+                </g>
+                <!-- Rear-Left Wheel -->
+                <g transform="translate(175, 360)">
+                  <rect x="-24" y="-42" width="48" height="84" rx="10" fill="#1b243d" stroke="#7c93c9" stroke-width="2" />
+                  <line x1="18" y1="-28" x2="-18" y2="-10" stroke="#9fb3e0" stroke-width="3" />
+                  <line x1="18" y1="-8"  x2="-18" y2="10"  stroke="#9fb3e0" stroke-width="3" />
+                  <line x1="18" y1="12"  x2="-18" y2="30"  stroke="#9fb3e0" stroke-width="3" />
+                </g>
+                <!-- Rear-Right Wheel -->
+                <g transform="translate(465, 360)">
+                  <rect x="-24" y="-42" width="48" height="84" rx="10" fill="#1b243d" stroke="#7c93c9" stroke-width="2" />
+                  <line x1="-18" y1="-28" x2="18" y2="-10" stroke="#9fb3e0" stroke-width="3" />
+                  <line x1="-18" y1="-8"  x2="18" y2="10"  stroke="#9fb3e0" stroke-width="3" />
+                  <line x1="-18" y1="12"  x2="18" y2="30"  stroke="#9fb3e0" stroke-width="3" />
+                </g>
+              </g>
+
+              <!-- Main Anodized Aluminum Chassis Body -->
+              <rect x="210" y="72" width="220" height="336" rx="28" fill="url(#metalChassis)" stroke="#6378ab" stroke-width="2.2" />
+              <rect x="224" y="88" width="192" height="304" rx="18" fill="none" stroke="rgba(148,163,209,0.18)" stroke-dasharray="6 6" />
+
+              <!-- ============================================================
+                   PART 2: DUAL IR LINE & FINISH SENSORS A6 / A7 (data-part="linesensors")
+                   ============================================================ -->
+              <g class="part" data-part="linesensors" onclick="selectRoverPart('linesensors')">
+                <rect x="262" y="76" width="46" height="28" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="2" />
+                <circle cx="285" cy="90" r="6" fill="#38bdf8" />
+                <text x="285" y="116" text-anchor="middle" fill="#93c5fd" font-size="10" font-weight="800">A6 (L)</text>
+
+                <rect x="332" y="76" width="46" height="28" rx="6" fill="#0f172a" stroke="#38bdf8" stroke-width="2" />
+                <circle cx="355" cy="90" r="6" fill="#38bdf8" />
+                <text x="355" y="116" text-anchor="middle" fill="#93c5fd" font-size="10" font-weight="800">A7 (R)</text>
+              </g>
+
+              <!-- ============================================================
+                   PART 3: FRONT IR BARRIER SENSOR A15 (data-part="frontir")
+                   ============================================================ -->
+              <g class="part" data-part="frontir" onclick="selectRoverPart('frontir')">
+                <path d="M 295 54 L 345 54 L 355 74 L 285 74 Z" fill="#1e293b" stroke="#f59e0b" stroke-width="2" />
+                <circle cx="310" cy="64" r="5" fill="#fbbf24" />
+                <circle cx="330" cy="64" r="5" fill="#38bdf8" />
+                <path d="M 304 52 L 284 30 L 356 30 L 336 52 Z" fill="rgba(251,191,36,0.18)" />
+              </g>
+
+              <!-- ============================================================
+                   PART 4: DUAL 4-LED WS2812B RGB PODS A11 / A12 (data-part="rgbleds")
+                   ============================================================ -->
+              <g class="part" data-part="rgbleds" onclick="selectRoverPart('rgbleds')">
+                <!-- Left RGB Bar (Pin 66 / A12) -->
+                <rect x="206" y="182" width="22" height="106" rx="8" fill="#090d1a" stroke="#a855f7" stroke-width="2" />
+                <circle cx="217" cy="200" r="6" fill="#ef4444" />
+                <circle cx="217" cy="223" r="6" fill="#eab308" />
+                <circle cx="217" cy="246" r="6" fill="#10b981" />
+                <circle cx="217" cy="269" r="6" fill="#3b82f6" />
+
+                <!-- Right RGB Bar (Pin 65 / A11) -->
+                <rect x="412" y="182" width="22" height="106" rx="8" fill="#090d1a" stroke="#a855f7" stroke-width="2" />
+                <circle cx="423" cy="200" r="6" fill="#ef4444" />
+                <circle cx="423" cy="223" r="6" fill="#eab308" />
+                <circle cx="423" cy="246" r="6" fill="#10b981" />
+                <circle cx="423" cy="269" r="6" fill="#3b82f6" />
+              </g>
+
+              <!-- ============================================================
+                   PART 5: MAKEBLOCK MEGAPI ATMEGA2560 BRAIN (data-part="megapi")
+                   ============================================================ -->
+              <g class="part" data-part="megapi" onclick="selectRoverPart('megapi')">
+                <rect x="252" y="156" width="136" height="148" rx="14" fill="url(#megapiRed)" stroke="#fca5a5" stroke-width="2.2" />
+                <!-- ATmega2560 QFP Chip -->
+                <rect x="292" y="198" width="56" height="56" rx="6" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5" />
+                <text x="320" y="224" text-anchor="middle" fill="#f8fafc" font-size="9" font-weight="900">ATmega</text>
+                <text x="320" y="236" text-anchor="middle" fill="#93c5fd" font-size="9" font-weight="800">2560</text>
+                <text x="320" y="178" text-anchor="middle" fill="#fee2e2" font-size="11" font-weight="900">MegaPi Mainboard</text>
+              </g>
+
+              <!-- ============================================================
+                   PART 6: BLE WIRELESS MODULE SERIAL3 (data-part="ble")
+                   ============================================================ -->
+              <g class="part" data-part="ble" onclick="selectRoverPart('ble')">
+                <rect x="334" y="274" width="46" height="62" rx="8" fill="#1e3a8a" stroke="#60a5fa" stroke-width="2" />
+                <path d="M 346 290 L 368 290 L 346 302 L 368 302" fill="none" stroke="#93c5fd" stroke-width="2" />
+                <text x="357" y="324" text-anchor="middle" fill="#dbeafe" font-size="9" font-weight="800">BLE 5.0</text>
+              </g>
+
+              <!-- ============================================================
+                   PART 7: REAR MECHANICAL BUMPERS A9 / A10 (data-part="bumpers")
+                   ============================================================ -->
+              <g class="part" data-part="bumpers" onclick="selectRoverPart('bumpers')">
+                <!-- Rear Left Switch A9 -->
+                <rect x="242" y="394" width="62" height="22" rx="6" fill="#1f2937" stroke="#f87171" stroke-width="2" />
+                <line x1="242" y1="418" x2="298" y2="426" stroke="#cbd5e1" stroke-width="3" stroke-linecap="round" />
+                <text x="273" y="409" text-anchor="middle" fill="#fecaca" font-size="9" font-weight="800">SW A9</text>
+
+                <!-- Rear Right Switch A10 -->
+                <rect x="336" y="394" width="62" height="22" rx="6" fill="#1f2937" stroke="#f87171" stroke-width="2" />
+                <line x1="398" y1="418" x2="342" y2="426" stroke="#cbd5e1" stroke-width="3" stroke-linecap="round" />
+                <text x="367" y="409" text-anchor="middle" fill="#fecaca" font-size="9" font-weight="800">SW A10</text>
+              </g>
+
+              <!-- Leader lines connecting parts to outer pill tags -->
+              <polyline class="leader" data-part="mecanum" points="151,110 105,105" />
+              <polyline class="leader" data-part="linesensors" points="320,76 320,42" />
+              <polyline class="leader" data-part="frontir" points="350,62 520,76" />
+              <polyline class="leader" data-part="rgbleds" points="206,235 100,258" />
+              <polyline class="leader" data-part="megapi" points="388,225 535,230" />
+              <polyline class="leader" data-part="ble" points="380,310 525,372" />
+              <polyline class="leader" data-part="bumpers" points="242,406 145,402" />
+            </svg>
+
+            <!-- Numbered HTML pill buttons rendered dynamically by education_popups.js -->
+            <div id="exDiagramTags"></div>
+          </div>
+        </div>
+
+        <div class="ex-legend">
+          💡 Tip: Click any numbered tag on the diagram—or use the interactive simulator on the right!
+        </div>
+      </div>
+
+      <!-- Right Column: Level 2 Deep-Dive & Live Interactive Part Simulator -->
+      <div class="ex-detail" id="exDetailPane"></div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL 2: CLEAN SCIENCE EXHIBIT POPUP (Ultrasonic / Battery / Thermal)
+       ======================================================================== -->
+  <div class="modal-backdrop" id="stemLearnModal" onclick="if(event.target===this) closeStemPopup()">
+    <div class="modal science-modal">
+      <button type="button" class="modal-close" onclick="closeStemPopup()" title="Close">✕</button>
+      <div id="stemLearnModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/mbot_ble.js"></script>
+  <script src="/js/esp32_ws.js"></script>
+  <script src="/js/track_animator.js"></script>
+  <script src="/js/battery_game_ui.js"></script>
+  <script src="/js/education_popups.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

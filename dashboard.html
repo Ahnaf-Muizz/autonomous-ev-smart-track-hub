@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>mBot Mega Web Bluetooth Cockpit</title>
+  <style>
+    :root {
+      --bg: #0e1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --accent: #58a6ff;
+      --active-green: #238636;
+      --hazard-red: #da3633;
+      --amber: #d29922;
+    }
+    body {
+      margin: 0;
+      padding: 20px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      user-select: none;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .badge {
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      background: var(--border);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 20px;
+    }
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .btn {
+      background: #21262d;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.1s ease;
+    }
+    .btn:hover:not(:disabled) {
+      background: #30363d;
+      border-color: #8b949e;
+    }
+    .btn:active:not(:disabled) {
+      background: var(--accent);
+      color: #000;
+    }
+    .btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .btn-connect { background: var(--active-green); border-color: #2ea043; }
+    .btn-stop { background: var(--hazard-red); border-color: #f85149; font-weight: bold; }
+    .btn-amber { background: var(--amber); color: #000; border-color: #e3b341; font-weight: bold; }
+
+    /* Cross Drive Pad */
+    .drive-pad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .drive-pad .btn {
+      height: 54px;
+      font-size: 15px;
+    }
+
+    .strip {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .strip .btn { flex: 1; }
+
+    #terminal {
+      height: 560px;
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 13px;
+      color: #7ee787;
+      overflow-y: scroll;
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
+    .rx-line { color: #58a6ff; }
+    .tx-line { color: #f2cc60; }
+  </style>
+</head>
+<body>
+
+  <h1>
+    Makeblock mBot Mega Cockpit
+    <span id="connBadge" class="badge" style="color: var(--hazard-red);">DISCONNECTED</span>
+  </h1>
+
+  <div class="grid">
+    <!-- Left Column: Controls -->
+    <div>
+      <div class="panel">
+        <div class="panel-title">Bluetooth Connection & Operational Modes</div>
+        <div class="strip">
+          <button id="btnConnect" class="btn btn-connect" onclick="connectBLE()">Connect BLE</button>
+          <button id="btnDisconnect" class="btn" onclick="disconnectBLE()" disabled>Disconnect</button>
+        </div>
+        <div class="strip">
+          <button class="btn cmdBtn" onclick="send('2')" disabled>[2] Manual Mode</button>
+          <button class="btn cmdBtn" onclick="send('1')" disabled>[1] Auto Line Follow</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Directional Drive Pad (WASD)</div>
+        <div class="drive-pad">
+          <div></div>
+          <button class="btn cmdBtn" onclick="send('w')" disabled><b>W</b><br><small>Forward</small></button>
+          <div></div>
+
+          <button class="btn cmdBtn" onclick="send('a')" disabled><b>A</b><br><small>Strafe L</small></button>
+          <button class="btn btn-stop cmdBtn" onclick="send(' ')" disabled><b>SPACE</b><br><small>HALT</small></button>
+          <button class="btn cmdBtn" onclick="send('d')" disabled><b>D</b><br><small>Strafe R</small></button>
+
+          <div></div>
+          <button class="btn cmdBtn" onclick="send('s')" disabled><b>S</b><br><small>Reverse</small></button>
+          <div></div>
+        </div>
+
+        <div class="panel-title">Speed Adjustments</div>
+        <div class="strip">
+          <button class="btn cmdBtn" onclick="send('j')" disabled>[J] Slower (-10)</button>
+          <button class="btn cmdBtn" onclick="send('k')" disabled>[K] Reset (100)</button>
+          <button class="btn cmdBtn" onclick="send('u')" disabled>[U] Faster (+10)</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Safety Interlock Toggles (Tabletop Mode)</div>
+        <div class="strip">
+          <button class="btn cmdBtn" onclick="send('8')" disabled>[8] Boundary</button>
+          <button class="btn cmdBtn" onclick="send('9')" disabled>[9] Barrier</button>
+          <button class="btn cmdBtn" onclick="send('b')" disabled>[B] Bumpers</button>
+        </div>
+        <div class="strip">
+          <button class="btn btn-amber cmdBtn" style="flex: 2;" onclick="send('t')" disabled>[T] Toggle Tabletop Master</button>
+          <button class="btn cmdBtn" style="flex: 1;" onclick="send('l')" disabled>[L] Line Raw</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Live Terminal Stream -->
+    <div>
+      <div class="panel" style="height: 100%; box-sizing: border-box; margin-bottom: 0;">
+        <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Live Robot Telemetry Stream</span>
+          <button class="btn" style="padding: 3px 10px; font-size: 11px;" onclick="clearLog()">Clear Terminal</button>
+        </div>
+        <div id="terminal"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const MAKEBLOCK_SERVICE_UUID = '0000ffe1-0000-1000-8000-00805f9b34fb';
+    const MAKEBLOCK_CHAR_NOTIFY  = '0000ffe2-0000-1000-8000-00805f9b34fb'; // MegaPi -> Web (RX)
+    const MAKEBLOCK_CHAR_WRITE   = '0000ffe3-0000-1000-8000-00805f9b34fb'; // Web -> MegaPi (TX)
+
+    let bleDevice = null;
+    let writeChar = null;
+    let notifyChar = null;
+
+    function log(text, className = '') {
+      const term = document.getElementById('terminal');
+      const span = document.createElement('span');
+      span.textContent = text + '\n';
+      if (className) span.className = className;
+      term.appendChild(span);
+      term.scrollTop = term.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('terminal').innerHTML = '';
+    }
+
+    async function connectBLE() {
+      try {
+        log("[SYS] Scanning for Makeblock BLE module...", 'tx-line');
+        bleDevice = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [MAKEBLOCK_SERVICE_UUID]
+        });
+
+        document.getElementById('connBadge').textContent = 'CONNECTING...';
+        document.getElementById('connBadge').style.color = 'var(--amber)';
+        bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+        const server = await bleDevice.gatt.connect();
+        const service = await server.getPrimaryService(MAKEBLOCK_SERVICE_UUID);
+
+        writeChar = await service.getCharacteristic(MAKEBLOCK_CHAR_WRITE);
+        notifyChar = await service.getCharacteristic(MAKEBLOCK_CHAR_NOTIFY);
+
+        await notifyChar.startNotifications();
+        notifyChar.addEventListener('characteristicvaluechanged', (e) => {
+          const dec = new TextDecoder('utf-8');
+          log(dec.decode(e.target.value).trim(), 'rx-line');
+        });
+
+        document.getElementById('connBadge').textContent = bleDevice.name || 'CONNECTED';
+        document.getElementById('connBadge').style.color = '#7ee787';
+        document.getElementById('btnConnect').disabled = true;
+        document.getElementById('btnDisconnect').disabled = false;
+        document.querySelectorAll('.cmdBtn').forEach(b => b.disabled = false);
+
+        log(`[SYS] Connected to ${bleDevice.name} via Serial3. Cockpit ready.`, 'rx-line');
+      } catch (err) {
+        log(`[ERROR] Connection failed: ${err.message}`, 'tx-line');
+        onDisconnected();
+      }
+    }
+
+    async function send(char) {
+      if (!writeChar) return;
+      try {
+        const enc = new TextEncoder('utf-8');
+        const data = enc.encode(char);
+        if (writeChar.properties.writeWithoutResponse) {
+          await writeChar.writeValueWithoutResponse(data);
+        } else {
+          await writeChar.writeValue(data);
+        }
+      } catch (e) {
+        log(`[ERR] TX Failed: ${e.message}`, 'tx-line');
+      }
+    }
+
+    function disconnectBLE() {
+      if (bleDevice && bleDevice.gatt.connected) {
+        bleDevice.gatt.disconnect();
+      }
+    }
+
+    function onDisconnected() {
+      document.getElementById('connBadge').textContent = 'DISCONNECTED';
+      document.getElementById('connBadge').style.color = 'var(--hazard-red)';
+      document.getElementById('btnConnect').disabled = false;
+      document.getElementById('btnDisconnect').disabled = true;
+      document.querySelectorAll('.cmdBtn').forEach(b => b.disabled = true);
+      writeChar = null;
+      notifyChar = null;
+      log("[SYS] BLE Link Disconnected.", 'tx-line');
+    }
+
+    // Direct Keyboard Teleoperation Listener
+    window.addEventListener('keydown', (e) => {
+      if (!writeChar || e.repeat) return;
+      const key = e.key.toLowerCase();
+      
+      // Pure WASD navigation + modes + safety toggles + speed
+      const validKeys = [
+        'w', 'a', 's', 'd', ' ',
+        '1', '2', '8', '9', 'b', 't',
+        'u', 'j', 'k', 'l', 'x'
+      ];
+
+      if (validKeys.includes(key)) {
+        e.preventDefault();
+        send(key);
+      }
+    });
+  </script>
+</body>
+</html>

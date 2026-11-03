@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ESP32 Gate WebSocket Telemetry & Cockpit</title>
+  <style>
+    :root {
+      --bg: #0e1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --accent: #58a6ff;
+      --green: #238636;
+      --red: #da3633;
+      --amber: #d29922;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      user-select: none;
+    }
+    h1 {
+      font-size: 22px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .badge {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      background: var(--border);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 20px;
+    }
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .panel-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+    .stat-display {
+      font-size: 44px;
+      font-weight: bold;
+      color: #58a6ff;
+      margin-bottom: 4px;
+    }
+    .indicator-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 10px;
+      margin-bottom: 16px;
+    }
+    .indicator-pill {
+      flex: 1;
+      padding: 12px;
+      border-radius: 6px;
+      text-align: center;
+      background: #21262d;
+      border: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .btn {
+      background: #21262d;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      margin-bottom: 8px;
+      transition: all 0.15s ease;
+    }
+    .btn:hover:not(:disabled) {
+      background: #30363d;
+      border-color: #8b949e;
+    }
+    .btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .btn-green { background: var(--green); border-color: #2ea043; }
+    .btn-red { background: var(--red); border-color: #f85149; }
+    #terminal {
+      height: 480px;
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 13px;
+      color: #7ee787;
+      overflow-y: scroll;
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
+    .ws-tx { color: #f2cc60; }
+    .ws-rx { color: #58a6ff; }
+  </style>
+</head>
+<body>
+
+  <h1>
+    ESP32 Automated Gate Cockpit
+    <span id="connBadge" class="badge" style="color: var(--red);">DISCONNECTED</span>
+  </h1>
+
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <div class="panel-title">WebSocket Connection</div>
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+          <input type="text" id="wsUri" value="ws://192.168.4.1:81" style="flex: 1; padding: 8px; background: #000; border: 1px solid var(--border); color: #fff; border-radius: 4px; font-family: monospace;">
+        </div>
+        <button id="btnConnect" class="btn btn-green" onclick="toggleConnect()">Connect WebSocket</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Vehicle Telemetry</div>
+        <div class="stat-display" id="carCounter">0</div>
+        <div style="font-size: 12px; color: #8b949e;">Cumulative Logged Vehicles (30s Lockout Active)</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Barrier Arm States</div>
+        <div class="indicator-row">
+          <div class="indicator-pill" id="pillGate1">GATE 1: CLOSED</div>
+          <div class="indicator-pill" id="pillGate2">GATE 2: CLOSED</div>
+        </div>
+
+        <div class="panel-title">Manual Remote Actuation</div>
+        <button class="btn btn-green" id="btnOpenGate2" onclick="sendCmd('OPEN_GATE2')" disabled>Open Gate 2 (Exit Barrier)</button>
+        <button class="btn btn-red" id="btnCloseGate2" onclick="sendCmd('CLOSE_GATE2')" disabled>Force Close Gate 2</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel" style="height: 100%; box-sizing: border-box; margin-bottom: 0;">
+        <div class="panel-title" style="display: flex; justify-content: space-between;">
+          <span>Live WebSocket Stream</span>
+          <button style="background: none; border: none; color: #8b949e; cursor: pointer; text-decoration: underline;" onclick="clearLog()">Clear</button>
+        </div>
+        <div id="terminal"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let socket = null;
+
+    function log(msg, className = '') {
+      const term = document.getElementById('terminal');
+      const span = document.createElement('span');
+      span.textContent = msg + '\n';
+      if (className) span.className = className;
+      term.appendChild(span);
+      term.scrollTop = term.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('terminal').innerHTML = '';
+    }
+
+    function toggleConnect() {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.close();
+        return;
+      }
+
+      const uri = document.getElementById('wsUri').value.trim();
+      log(`[WS] Connecting to ${uri}...`, 'ws-tx');
+      
+      socket = new WebSocket(uri);
+
+      socket.onopen = () => {
+        document.getElementById('connBadge').textContent = 'CONNECTED';
+        document.getElementById('connBadge').style.color = '#7ee787';
+        document.getElementById('btnConnect').textContent = 'Disconnect';
+        document.getElementById('btnConnect').className = 'btn btn-red';
+        document.getElementById('btnOpenGate2').disabled = false;
+        document.getElementById('btnCloseGate2').disabled = false;
+        log('[WS] Handshake established. Streaming telemetry active.', 'ws-rx');
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          document.getElementById('carCounter').textContent = data.carCount;
+
+          // Update Gate 1 pill
+          const p1 = document.getElementById('pillGate1');
+          p1.textContent = `GATE 1: ${data.gate1}`;
+          p1.style.color = (data.gate1 === 'OPEN') ? '#7ee787' : '#e6edf3';
+          p1.style.borderColor = (data.gate1 === 'OPEN') ? 'var(--green)' : 'var(--border)';
+
+          // Update Gate 2 pill
+          const p2 = document.getElementById('pillGate2');
+          p2.textContent = `GATE 2: ${data.gate2}`;
+          p2.style.color = (data.gate2 === 'OPEN') ? '#7ee787' : '#e6edf3';
+          p2.style.borderColor = (data.gate2 === 'OPEN') ? 'var(--green)' : 'var(--border)';
+
+          if (data.log && data.log.length > 0) {
+            log(`<< [EVENT]: ${data.log}`, 'ws-rx');
+          }
+        } catch (e) {
+          log(`<< ${event.data}`, 'ws-rx');
+        }
+      };
+
+      socket.onclose = () => {
+        document.getElementById('connBadge').textContent = 'DISCONNECTED';
+        document.getElementById('connBadge').style.color = 'var(--red)';
+        document.getElementById('btnConnect').textContent = 'Connect WebSocket';
+        document.getElementById('btnConnect').className = 'btn btn-green';
+        document.getElementById('btnOpenGate2').disabled = true;
+        document.getElementById('btnCloseGate2').disabled = true;
+        log('[WS] Disconnected from server.', 'ws-tx');
+      };
+
+      socket.onerror = (err) => {
+        log(`[WS ERROR] ${err.message || 'Connection failed'}`, 'ws-tx');
+      };
+    }
+
+    function sendCmd(cmd) {
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+      socket.send(cmd);
+      log(`>> [TX]: ${cmd}`, 'ws-tx');
+    }
+  </script>
+</body>
+</html>
