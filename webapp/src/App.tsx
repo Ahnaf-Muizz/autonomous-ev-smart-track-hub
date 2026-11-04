@@ -1685,18 +1685,6 @@ export const App: React.FC = () => {
                     <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
                     <span>Live Tracking: Autonomous line-following in progress...</span>
                   </div>
-
-                  {/* Manual Docking Advance / Safety Fallback Button */}
-                  <button
-                    type="button"
-                    onClick={handleDockAtChargerNow}
-                    className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-emerald-900/30 flex items-center justify-center gap-2 cursor-pointer transition transform hover:scale-[1.01] active:scale-[0.99]"
-                    title="If car is at charger or gate is open, click to begin supercharging game immediately"
-                  >
-                    <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />
-                    <span>Car at Charger? Play Supercharger Game!</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
                 </div>
               )}
 
