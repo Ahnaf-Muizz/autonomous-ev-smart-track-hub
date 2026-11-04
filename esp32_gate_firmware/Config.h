@@ -24,8 +24,8 @@ const unsigned long CAR_LOCKOUT_MS    = 30000; // 30.0s debounce between car cou
 const unsigned long STAGE_DELAY_MS    = 1000;  // 1.0s duration per color stage
 
 // Independent Autonomous Gate Timers:
-const unsigned long GATE1_HOLD_OPEN_MS = 20000; // Gate 1 closes exactly 20.0s after ultrasonic opens it
-const unsigned long GATE2_HOLD_OPEN_MS = 10000; // Gate 2 closes exactly 10.0s after WebSocket opens it
+const unsigned long GATE1_HOLD_OPEN_MS = 5000; // Gate 1 closes exactly 20.0s after ultrasonic opens it
+const unsigned long GATE2_HOLD_OPEN_MS = 5000; // Gate 2 closes exactly 10.0s after WebSocket opens it
 
 // Hardware Calibration Parameters (Calibrated per Gate)
 const int S1_ANGLE_OPEN               = 0;     // Gate 1: Entry Barrier Open (0 deg)
@@ -39,7 +39,7 @@ const int SERVO_MIN_US                = 500;
 const int SERVO_MAX_US                = 2400;
 
 // Active travel hold window before cutting PWM train (allows physical swing, then detaches to eliminate jitter)
-const unsigned long SERVO_TRAVEL_MS   = 500; 
+const unsigned long SERVO_TRAVEL_MS   = 100; 
 
 // SoftAP Credentials
 const char* const AP_SSID             = "ESP32_Gate_Network";
