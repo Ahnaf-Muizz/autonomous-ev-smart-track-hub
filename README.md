@@ -22,7 +22,7 @@ flowchart TD
         Gate2["Gate 2 Exit Barrier (Servo 2)"]
         Tower["3-Color LED Tower & Buzzer"]
         Sonar["HC-SR04 Ultrasonic Vehicle Sensor"]
-        ESP32["ESP32 Smart Controller (Track-01)"]
+        ESP32["ESP32 Smart Controller (SoftAP: 192.168.4.1)"]
         Sonar -->|Trigger / Echo| ESP32
         ESP32 -->|PWM GPIO 14| Gate1
         ESP32 -->|PWM GPIO 27| Gate2
@@ -45,22 +45,25 @@ flowchart TD
         MegaPi <--> BLE
     end
 
-    subgraph HostServer["Host Computer (Local Network)"]
+    subgraph HostStation["Host Laptop (Lab Station)"]
         PythonServer["Python HTTP / SSE Server (:8080)"]
         PhysicsEngine["Coupled Electro-Thermal Physics Engine"]
         Datastore["Leaderboard & Physics Trajectory Storage"]
+        MasterConsole["Host Master Console & BLE Gateway"]
         PythonServer <--> PhysicsEngine
         PythonServer <--> Datastore
+        MasterConsole <-->|Localhost /api| PythonServer
+        MasterConsole <-->|Exclusive Web Bluetooth GATT| BLE
     end
 
-    subgraph WebInterfaces["Browser Cockpits (Chrome / Edge)"]
-        StudentKiosk["Page 1: Student Mission Cockpit (/)"]
-        MasterConsole["Page 2: Host Master Console (/master)"]
+    subgraph KioskLaptops["Student Kiosk Laptops & Tablets"]
+        StudentKiosk["Student Mission Cockpit (/)"]
     end
 
-    WebInterfaces <-->|HTTP REST & SSE /api/events| PythonServer
-    WebInterfaces <-->|Web Bluetooth GATT| BLE
-    WebInterfaces <-->|WebSocket ws://192.168.4.1:81| ESP32
+    StudentKiosk <-->|HTTP REST & SSE /api/events| PythonServer
+    PythonServer -.->|Relay Commands & Events| MasterConsole
+    StudentKiosk <-->|WebSocket ws://192.168.4.1:81| ESP32
+    MasterConsole <-->|WebSocket ws://192.168.4.1:81| ESP32
 ```
 
 ---
@@ -141,13 +144,17 @@ Once started, open **Google Chrome** or **Microsoft Edge** and navigate to:
 
 ---
 
-### Step 1.5: SSL Certificate Installation (For Multi-Device Web Bluetooth)
+### Step 1.5: Multi-Device Deployment (Exclusive Host BLE + Kiosk Server Relay)
 
-Google Chrome requires a secure context (**HTTPS** or `localhost`) to enable the **Web Bluetooth API**.
-* If you run Chrome directly on the host machine hosting `localhost:8080`, Web Bluetooth works immediately.
-* If connecting a remote tablet or student laptop to the host machine over LAN:
-  1. Run **`trust_certificate.bat`** (installs `server/cert.pem` into the Windows Trusted Root Certification Authorities store).
-  2. Launch the server in HTTPS mode on port `8443` or access the secure endpoint.
+To guarantee reliable operation without requiring Bluetooth pairing, certificates, or flags on student laptops:
+1. **Host Laptop (Lab Station)**:
+   - Runs `start_dashboard.bat` (serves the dashboard and Python sync hub on port `8080`).
+   - Maintains the **exclusive Web Bluetooth link** with the **mBot Mega** rover via `http://localhost:8080/master` or `http://localhost:8080/`.
+2. **Kiosk Laptop / Student Tablets**:
+   - Connect directly to the Host over the local Wi-Fi router (or ESP32 SoftAP Wi-Fi) at `http://<HOST-IP>:8080/`.
+   - **Zero Bluetooth setup required on kiosks**: Kiosks send all vehicle commands (Launch, Dock, Stop, Mode, Teleop) via HTTP REST (`POST /api/rover/command`).
+   - The Python server broadcasts these commands via Server-Sent Events (SSE) to the Host Laptop, which transmits them to the mBot Mega rover over BLE with zero human intervention.
+   - Live rover telemetry events (`[EVT:LAUNCH]`, `[EVT:OBS_STOP]`, `[EVT:FINISH]`) received by the Host are immediately relayed to all kiosks, ensuring all screens stay synchronized.
 
 ---
 

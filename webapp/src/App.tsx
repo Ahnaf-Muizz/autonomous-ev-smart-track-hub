@@ -119,6 +119,9 @@ export const App: React.FC = () => {
   // Global Hardware, Simulation Mode & Sync State (Default simulationMode = false for real field sync)
   const [serverOnline, setServerOnline] = useState(false);
   const [bleConnected, setBleConnected] = useState(false);
+  const [remoteBleConnected, setRemoteBleConnected] = useState(false);
+  const [roverDeviceName, setRoverDeviceName] = useState('mBot Mega');
+  const [clientId] = useState(() => 'client_' + Math.random().toString(36).slice(2, 9) + '_' + Date.now().toString(36));
   const [espConnected, setEspConnected] = useState(false);
   const [espHost, setEspHost] = useState('192.168.4.1:81');
   const [simulationMode, setSimulationMode] = useState(false);
@@ -280,6 +283,45 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  // Unified Rover Command Dispatcher:
+  // If THIS browser holds the active Web Bluetooth connection (Host Laptop), transmit directly with 0ms latency.
+  // Otherwise (e.g. Student Kiosk laptop), relay command to the server so the Host Laptop sends it via BLE!
+  const dispatchRoverChar = useCallback((ch: string) => {
+    if (bleRef.current?.connected) {
+      void bleRef.current.sendChar(ch);
+    } else {
+      fetch('/api/rover/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cmd: ch, clientId }),
+      }).catch((e) => appendLog(`[Relay TX Err] ${e?.message || e}`));
+    }
+  }, [clientId, appendLog]);
+
+  const dispatchRoverText = useCallback((txt: string) => {
+    if (bleRef.current?.connected) {
+      void bleRef.current.sendText(txt);
+    } else {
+      fetch('/api/rover/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: txt, clientId }),
+      }).catch((e) => appendLog(`[Relay TX Err] ${e?.message || e}`));
+    }
+  }, [clientId, appendLog]);
+
+  const dispatchRoverEmergencyStop = useCallback(() => {
+    if (bleRef.current?.connected) {
+      void bleRef.current.emergencyStop();
+    } else {
+      fetch('/api/rover/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'emergency_stop', clientId }),
+      }).catch((e) => appendLog(`[Relay TX Err] ${e?.message || e}`));
+    }
+  }, [clientId, appendLog]);
+
   const handleSaveSegmentTimers = useCallback((launchSec: number, finishSec: number) => {
     const lSec = Math.max(0.5, Math.min(60, Number(launchSec) || 2.0));
     const fSec = Math.max(0.5, Math.min(60, Number(finishSec) || 3.0));
@@ -417,56 +459,88 @@ export const App: React.FC = () => {
     handleLapFinishedRef.current = handleLapFinished;
   });
 
+  const handleRoverEventTag = useCallback(
+    (tag: string, fromRelay = false) => {
+      if (tag === 'COUNTDOWN' || tag === 'COUNTDOWN_START' || tag.startsWith('CD:')) {
+        setPhase('COUNTDOWN');
+        setStep(2);
+      } else if (tag === 'LAUNCH') {
+        setPhase('DRIVING_TO_GATE1');
+        setStep(2);
+      } else if (tag === 'OBS_CLEAR' || tag === 'PATROL_RESUME') {
+        setPhase((prev) => {
+          if (prev === 'WAITING_GATE1' || prev === 'DRIVING_TO_GATE1') {
+            setGate1Open(true);
+            setTrafficLight('GREEN');
+            // Automatically advance to Step 3 (Charging Game) once rover pulls into charging station
+            window.setTimeout(() => {
+              setPhase((curr) => {
+                if (curr === 'DRIVING_TO_CHARGE' || curr === 'WAITING_GATE1' || curr === 'DRIVING_TO_GATE1') {
+                  setStep(3);
+                  if (!fromRelay) {
+                    dispatchRoverChar('c');
+                  }
+                  pushServerState({ active_phase: 'READY_TO_CHARGE' });
+                  return 'READY_TO_CHARGE';
+                }
+                return curr;
+              });
+            }, 3000);
+            return 'DRIVING_TO_CHARGE';
+          }
+          if (prev === 'CHARGED') {
+            return 'DRIVING_TO_FINISH';
+          }
+          return prev;
+        });
+      } else if (tag === 'OBS_STOP') {
+        setPhase((prev) => {
+          if (prev === 'DRIVING_TO_GATE1' || prev === 'WAITING_GATE1') {
+            return 'WAITING_GATE1';
+          }
+          setStep(3);
+          if (!fromRelay) {
+            dispatchRoverChar('c');
+          }
+          return 'READY_TO_CHARGE';
+        });
+      } else if (tag === 'FINISH') {
+        handleLapFinishedRef.current();
+      } else if (tag === 'STANDBY_READY' || tag === 'MODE_2') {
+        setPhase('STANDBY');
+        setStep(1);
+      }
+    },
+    [dispatchRoverChar, pushServerState]
+  );
+
+  const handleRoverEventTagRef = useRef(handleRoverEventTag);
+  useEffect(() => {
+    handleRoverEventTagRef.current = handleRoverEventTag;
+  });
+
   useEffect(() => {
     bleRef.current = new MbotBleClient({
-      onStatus: (conn) => setBleConnected(conn),
+      onStatus: (conn, name) => {
+        setBleConnected(conn);
+        if (conn && name) setRoverDeviceName(name);
+        fetch('/api/rover/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            connected: conn,
+            name: name || bleRef.current?.lockedDeviceName || 'mBot Mega',
+          }),
+        }).catch(() => {});
+      },
       onLog: appendLog,
       onEvent: (tag) => {
-        if (tag === 'COUNTDOWN' || tag === 'COUNTDOWN_START' || tag.startsWith('CD:')) {
-          setPhase('COUNTDOWN');
-          setStep(2);
-        } else if (tag === 'LAUNCH') {
-          setPhase('DRIVING_TO_GATE1');
-          setStep(2);
-        } else if (tag === 'OBS_CLEAR' || tag === 'PATROL_RESUME') {
-          setPhase((prev) => {
-            if (prev === 'WAITING_GATE1' || prev === 'DRIVING_TO_GATE1') {
-              setGate1Open(true);
-              setTrafficLight('GREEN');
-              // Automatically advance to Step 3 (Charging Game) once rover pulls into charging station
-              window.setTimeout(() => {
-                setPhase((curr) => {
-                  if (curr === 'DRIVING_TO_CHARGE' || curr === 'WAITING_GATE1' || curr === 'DRIVING_TO_GATE1') {
-                    setStep(3);
-                    bleRef.current?.sendChar('c');
-                    pushServerState({ active_phase: 'READY_TO_CHARGE' });
-                    return 'READY_TO_CHARGE';
-                  }
-                  return curr;
-                });
-              }, 3000);
-              return 'DRIVING_TO_CHARGE';
-            }
-            if (prev === 'CHARGED') {
-              return 'DRIVING_TO_FINISH';
-            }
-            return prev;
-          });
-        } else if (tag === 'OBS_STOP') {
-          setPhase((prev) => {
-            if (prev === 'DRIVING_TO_GATE1' || prev === 'WAITING_GATE1') {
-              return 'WAITING_GATE1';
-            }
-            setStep(3);
-            bleRef.current?.sendChar('c');
-            return 'READY_TO_CHARGE';
-          });
-        } else if (tag === 'FINISH') {
-          handleLapFinishedRef.current();
-        } else if (tag === 'STANDBY_READY' || tag === 'MODE_2') {
-          setPhase('STANDBY');
-          setStep(1);
-        }
+        handleRoverEventTagRef.current(tag, false);
+        fetch('/api/rover/event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tag, clientId }),
+        }).catch(() => {});
       },
     });
 
@@ -496,7 +570,7 @@ export const App: React.FC = () => {
               setPhase((prev) => {
                 if (prev === 'DRIVING_TO_CHARGE' || prev === 'WAITING_GATE1' || prev === 'DRIVING_TO_GATE1') {
                   setStep(3);
-                  bleRef.current?.sendChar('c');
+                  dispatchRoverChar('c');
                   pushServerState({ active_phase: 'READY_TO_CHARGE' });
                   return 'READY_TO_CHARGE';
                 }
@@ -540,6 +614,12 @@ export const App: React.FC = () => {
         if (d.state) {
           setPaused(Boolean(d.state.paused));
           setAllStopActive(Boolean(d.state.all_stop));
+          if (typeof d.state.rover_ble_connected === 'boolean') {
+            setRemoteBleConnected(d.state.rover_ble_connected);
+          }
+          if (d.state.rover_name) {
+            setRoverDeviceName(d.state.rover_name);
+          }
           if (typeof d.state.simulation_mode === 'boolean') {
             setSimulationMode(d.state.simulation_mode);
           }
@@ -572,6 +652,12 @@ export const App: React.FC = () => {
           const st = msg.payload;
           setPaused(Boolean(st.paused));
           setAllStopActive(Boolean(st.all_stop));
+          if (typeof st.rover_ble_connected === 'boolean') {
+            setRemoteBleConnected(st.rover_ble_connected);
+          }
+          if (st.rover_name) {
+            setRoverDeviceName(st.rover_name);
+          }
           if (typeof st.simulation_mode === 'boolean') {
             setSimulationMode(st.simulation_mode);
           }
@@ -619,6 +705,23 @@ export const App: React.FC = () => {
           } else if (currentEvt && currentEvt !== lastHandledEventRef.current) {
             lastHandledEventRef.current = currentEvt;
           }
+        } else if (msg.type === 'rover_command' && msg.payload) {
+          // If THIS browser holds the active BLE link (Host Laptop), transmit command to mBot Mega!
+          if (bleRef.current?.connected && msg.payload.clientId !== clientId) {
+            const p = msg.payload;
+            if (p.action === 'emergency_stop') {
+              void bleRef.current.emergencyStop();
+            } else if (p.cmd) {
+              void bleRef.current.sendChar(p.cmd);
+            } else if (p.text) {
+              void bleRef.current.sendText(p.text);
+            }
+          }
+        } else if (msg.type === 'rover_event' && msg.payload?.tag) {
+          // If this event was broadcast by Host Laptop BLE, update Kiosk UI in real-time
+          if (msg.payload.clientId !== clientId) {
+            handleRoverEventTagRef.current(msg.payload.tag, true);
+          }
         } else if (msg.type === 'leaderboard_sync' && msg.payload) {
           const rawEntries: LeaderboardEntry[] = Array.isArray(msg.payload) ? msg.payload : [];
           const sorted = [...rawEntries].sort((a, b) => (b.total_points ?? 0) - (a.total_points ?? 0));
@@ -661,9 +764,9 @@ export const App: React.FC = () => {
         if (e.key === ' ') {
           e.preventDefault();
         }
-        bleRef.current?.emergencyStop();
-        bleRef.current?.sendChar('2');
-        bleRef.current?.sendChar(' ');
+        dispatchRoverEmergencyStop();
+        dispatchRoverChar('2');
+        dispatchRoverChar(' ');
         handleResetNextStudent();
         setStep(1);
         setPhase('STANDBY');
@@ -696,7 +799,7 @@ export const App: React.FC = () => {
     setGate1Open(false);
     setGate2Open(false);
 
-    bleRef.current?.sendChar('1');
+    dispatchRoverChar('1');
     espRef.current?.sendCommand('RESET_LOCKOUT');
 
     setStep(2);
@@ -766,7 +869,7 @@ export const App: React.FC = () => {
     setTrafficLight('GREEN');
     setPhase('READY_TO_CHARGE');
     setStep(3);
-    bleRef.current?.sendChar('c');
+    dispatchRoverChar('c');
   };
 
   // Called when student begins Phase 3 supercharger game (clicking "Got It — Play Game!" or starting charge)
@@ -792,7 +895,7 @@ export const App: React.FC = () => {
     setLiveSeries([]);
     setPhase('CHARGING');
 
-    bleRef.current?.sendChar('g');
+    dispatchRoverChar('g');
 
     // Compute exact calibrated physics locally so UI & Safe Window [minReq, minReq+1200] ALWAYS match 100%,
     // while also posting to /api/battery/simulate to store the run in server/game_history.json!
@@ -856,7 +959,7 @@ export const App: React.FC = () => {
 
       if (summary.success) {
         setPhase('CHARGED');
-        bleRef.current?.sendChar('e');
+        dispatchRoverChar('e');
         espRef.current?.sendCommand('OPEN_GATE2');
         setGate2Open(true);
 
@@ -879,7 +982,7 @@ export const App: React.FC = () => {
         }, 10000);
       } else {
         setPhase('CHARGE_FAILED');
-        bleRef.current?.sendChar('f');
+        dispatchRoverChar('f');
         const nextAtt = attemptCountRef.current + 1;
         setAttemptCount(nextAtt);
         attemptCountRef.current = nextAtt;
@@ -889,9 +992,9 @@ export const App: React.FC = () => {
 
   const handleResetNextStudent = () => {
     // 1. Direct hardware BLE emergency halt FIRST & force Mode 2 (Zero delay, non-blocking)
-    bleRef.current?.emergencyStop();
-    bleRef.current?.sendChar('2');
-    bleRef.current?.sendChar(' ');
+    dispatchRoverEmergencyStop();
+    dispatchRoverChar('2');
+    dispatchRoverChar(' ');
 
     // 2. Clear timers and local tracking
     if (countdownTimerRef.current) {
@@ -1151,22 +1254,56 @@ export const App: React.FC = () => {
             <span className="xl:hidden">ESP32</span>
           </button>
 
+          {/* Rover BLE Status Badge: Exclusive Host Laptop Web Bluetooth with Kiosk Relay Mode */}
           <button
             type="button"
-            onClick={() => bleRef.current?.connect()}
-            title="mBot Mega Web Bluetooth — Click to Pair/Connect"
+            onClick={() => {
+              if (bleConnected) {
+                appendLog(`[Rover BLE] Host connection active (${roverDeviceName}).`);
+              } else if (remoteBleConnected) {
+                appendLog(`[Rover Relay] mBot Mega is connected exclusively via Host Laptop BLE relay (${roverDeviceName}).`);
+              } else if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || route === 'master')) {
+                bleRef.current?.connect();
+              } else {
+                appendLog('[Rover Info] mBot Mega is controlled exclusively by the Host Laptop. Please pair mBot on the Host Laptop Master Console.');
+              }
+            }}
+            title={
+              bleConnected
+                ? `Direct Host Web Bluetooth active (${roverDeviceName}) — Click for info`
+                : remoteBleConnected
+                ? `Host BLE Relay Active (${roverDeviceName}) — Kiosk signals relay via Server`
+                : typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || route === 'master')
+                ? 'Host Web Bluetooth — Click to Pair/Connect mBot Mega'
+                : 'mBot Mega Offline — Connect exclusively on Host Laptop Master Console'
+            }
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-extrabold transition cursor-pointer shrink-0 whitespace-nowrap ${
               bleConnected
                 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-400/40'
-                : theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                : remoteBleConnected
+                ? 'bg-cyan-500/15 text-cyan-400 border-cyan-400/40'
+                : theme === 'dark'
+                ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
             }`}
           >
             <span
               className={`w-2 h-2 rounded-full shrink-0 ${
-                bleConnected ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-rose-400'
+                bleConnected
+                  ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]'
+                  : remoteBleConnected
+                  ? 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]'
+                  : 'bg-rose-400'
               }`}
             />
-            <span className="hidden xl:inline">mBot: {bleConnected ? 'Connected' : 'Offline'}</span>
+            <span className="hidden xl:inline">
+              mBot:{' '}
+              {bleConnected
+                ? 'Host BLE'
+                : remoteBleConnected
+                ? 'Relay Active'
+                : 'Offline'}
+            </span>
             <span className="xl:hidden">mBot</span>
           </button>
 
@@ -1957,15 +2094,15 @@ export const App: React.FC = () => {
           gateState={gateStateText}
           ultrasonicCm={ultrasonicCm}
           lockoutSec={lockoutSec}
-          bleConnected={bleConnected}
+          bleConnected={bleConnected || remoteBleConnected}
           espConnected={espConnected}
           espHost={espHost}
           setEspHost={setEspHost}
           onConnectBle={() => bleRef.current?.connect()}
           onUnlockBle={() => bleRef.current?.unlockRover()}
-          lockedRoverName={bleRef.current?.lockedDeviceName || null}
-          onSendBleChar={(ch) => bleRef.current?.sendChar(ch)}
-          onSendBleText={(txt) => bleRef.current?.sendText(txt)}
+          lockedRoverName={bleRef.current?.lockedDeviceName || (remoteBleConnected ? roverDeviceName : null)}
+          onSendBleChar={(ch) => dispatchRoverChar(ch)}
+          onSendBleText={(txt) => dispatchRoverText(txt)}
           onConnectEsp={async () => {
             await espRef.current?.connect(espHost);
             await espRef.current?.probe();
@@ -1975,9 +2112,9 @@ export const App: React.FC = () => {
             if (ok) setEspConnected(true);
           }}
           onTriggerAllStop={() => {
-            bleRef.current?.emergencyStop();
-            bleRef.current?.sendChar('2');
-            bleRef.current?.sendChar(' ');
+            dispatchRoverEmergencyStop();
+            dispatchRoverChar('2');
+            dispatchRoverChar(' ');
             try {
               void espRef.current?.sendCommand('RESET_GATES').catch(() => {});
             } catch {}
@@ -1991,9 +2128,9 @@ export const App: React.FC = () => {
             });
           }}
           onStopMission={() => {
-            bleRef.current?.emergencyStop();
-            bleRef.current?.sendChar('2');
-            bleRef.current?.sendChar(' ');
+            dispatchRoverEmergencyStop();
+            dispatchRoverChar('2');
+            dispatchRoverChar(' ');
             handleResetNextStudent();
             setStep(1);
             setPhase('STANDBY');
@@ -2008,7 +2145,7 @@ export const App: React.FC = () => {
             const next = !paused;
             setPaused(next);
             if (!next) setAllStopActive(false);
-            if (next) bleRef.current?.sendChar(' ');
+            if (next) dispatchRoverChar(' ');
             pushServerState({
               paused: next,
               all_stop: false,
@@ -2018,9 +2155,9 @@ export const App: React.FC = () => {
           onResetLapAndGate1={() => {
             setPaused(false);
             setAllStopActive(false);
-            bleRef.current?.emergencyStop();
-            bleRef.current?.sendChar('2');
-            bleRef.current?.sendChar(' ');
+            dispatchRoverEmergencyStop();
+            dispatchRoverChar('2');
+            dispatchRoverChar(' ');
             handleResetNextStudent();
             setStep(1);
             setPhase('STANDBY');

@@ -318,6 +318,8 @@ class HubState:
             "target_charge_minutes": 30,
             "esp32_ip": "192.168.4.1:81",
             "esp32_online": False,
+            "rover_ble_connected": False,
+            "rover_name": "mBot Mega",
             "gate1_open": False,
             "gate2_open": False,
             "gate1_lockout_sec": 0.0,
@@ -598,6 +600,14 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
                 st = dict(HUB.state)
             return self._send_json({"ok": True, "state": st})
 
+        if path == "/api/rover/status":
+            with HUB.lock:
+                return self._send_json({
+                    "ok": True,
+                    "connected": HUB.state.get("rover_ble_connected", False),
+                    "name": HUB.state.get("rover_name", "mBot Mega"),
+                })
+
         if path == "/api/leaderboard":
             with HUB.lock:
                 lb = list(HUB.leaderboard)
@@ -663,6 +673,53 @@ class DashboardRequestHandler(http.server.SimpleHTTPRequestHandler):
             body = json.loads(body_raw)
         except Exception:
             body = {}
+
+        if path == "/api/rover/command":
+            cmd = str(body.get("cmd") or body.get("char") or "").strip()
+            text = str(body.get("text") or "").strip()
+            action = str(body.get("action") or "").strip()
+            client_id = str(body.get("clientId") or "").strip()
+
+            desc = cmd or text or action or "NOOP"
+            log_event("ROVER RELAY", f"Command relayed from Kiosk ({client_ip}): '{desc}'", client_ip)
+
+            HUB.broadcast("rover_command", {
+                "cmd": cmd,
+                "text": text,
+                "action": action,
+                "clientId": client_id,
+                "ts": time.time(),
+            })
+            return self._send_json({"ok": True, "relayed": True, "cmd": cmd, "text": text, "action": action})
+
+        if path == "/api/rover/status":
+            connected = bool(body.get("connected", False))
+            name = str(body.get("name") or "mBot Mega")
+            client_id = str(body.get("clientId") or "").strip()
+
+            prev_conn = HUB.state.get("rover_ble_connected", False)
+            snap = HUB.update_state({
+                "rover_ble_connected": connected,
+                "rover_name": name,
+            })
+            if connected != prev_conn:
+                log_event("ROVER BLE", f"Host reported BLE link: {'CONNECTED (' + name + ')' if connected else 'DISCONNECTED'}", client_ip)
+            return self._send_json({"ok": True, "rover_ble_connected": connected, "name": name})
+
+        if path == "/api/rover/event":
+            tag = str(body.get("tag") or "").strip()
+            line = str(body.get("line") or "").strip()
+            client_id = str(body.get("clientId") or "").strip()
+
+            log_event("ROVER TELEMETRY", f"Host BLE event broadcast: [EVT:{tag}]", client_ip)
+
+            HUB.broadcast("rover_event", {
+                "tag": tag,
+                "line": line,
+                "clientId": client_id,
+                "ts": time.time(),
+            })
+            return self._send_json({"ok": True, "broadcasted": True, "tag": tag})
 
         if path == "/api/esp/probe":
             host = str(body.get("host", "192.168.4.1:81")).strip()
