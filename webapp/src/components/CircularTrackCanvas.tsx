@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GatePartId, RoverPhase } from '../types';
-import { Cpu, Sparkles, Timer, User, Zap } from 'lucide-react';
+import { Cpu, Timer, User, Zap } from 'lucide-react';
 
 interface CircularTrackCanvasProps {
   phase: RoverPhase;
@@ -12,7 +12,6 @@ interface CircularTrackCanvasProps {
   trafficLight: 'RED' | 'YELLOW' | 'GREEN';
   socPct: number;
   tempC: number;
-  statusCaption: string;
   simulationMode?: boolean;
   launchToGate1Sec?: number;
   gate2ToFinishSec?: number;
@@ -133,7 +132,6 @@ export const CircularTrackCanvas: React.FC<CircularTrackCanvasProps> = ({
   gate2Open,
   trafficLight,
   socPct,
-  statusCaption,
   simulationMode = false,
   launchToGate1Sec = 2.0,
   gate2ToFinishSec = 3.0,
@@ -867,22 +865,6 @@ export const CircularTrackCanvas: React.FC<CircularTrackCanvasProps> = ({
           className={`w-full h-full block ${hoverTarget ? 'cursor-pointer' : 'cursor-default'}`}
         />
       </div>
-
-      {/* Dedicated Bottom Status Footer (Never overlaps the Start / Finish Line!) */}
-      {statusCaption && statusCaption.trim().length > 0 ? (
-        <div
-          className={`px-5 py-3 border-t flex items-center justify-center gap-2.5 ${
-            theme === 'dark'
-              ? 'bg-slate-900/90 border-slate-800/80 text-slate-100'
-              : 'bg-slate-50 border-slate-200/80 text-slate-800'
-          }`}
-        >
-          <Sparkles className={`w-4 h-4 shrink-0 animate-pulse ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`} />
-          <span className="text-xs sm:text-sm font-extrabold text-center truncate">
-            {statusCaption}
-          </span>
-        </div>
-      ) : null}
     </div>
   );
 };

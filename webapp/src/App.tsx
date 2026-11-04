@@ -1079,20 +1079,6 @@ export const App: React.FC = () => {
     }
   };
 
-  const statusCaptions: Record<RoverPhase, string> = {
-    STANDBY: 'Ready at Start Line! Press Start Rover Mission to go!',
-    COUNTDOWN: `Get Ready! Launching in ${countdownSec ?? 5} seconds...`,
-    DRIVING_TO_GATE1: 'Cruising the track! Heading toward Gate 1...',
-    WAITING_GATE1: 'Gate 1 Spotted the Car! Traffic Light: Red → Yellow → Green!',
-    DRIVING_TO_CHARGE: 'Gate 1 Open! Pulling into the EV Supercharger Bay...',
-    READY_TO_CHARGE: '',
-    CHARGING: '⚡ Supercharging Battery (10s)... Watch the Heat Bar!',
-    CHARGED: '✅ 100% Full! Gate 2 is Opening — Zooming to the Finish Line!',
-    CHARGE_FAILED: '🚨 Oops! Adjust your Charging Speed (mA) and try again!',
-    DRIVING_TO_FINISH: 'Final Sprint to the Checkered Finish Line!',
-    FINISH_CELEBRATION: '🎉 Loop Complete! Review your Scorecard & Click Complete Mission!',
-  };
-
   const activeScience = scienceTopic ? SCIENCE_TOPICS[scienceTopic] : null;
 
   return (
@@ -1356,7 +1342,6 @@ export const App: React.FC = () => {
                   trafficLight={trafficLight}
                   socPct={livePoint?.soc_pct ?? (phase === 'CHARGED' ? 100 : Math.round(initialSoc * 100))}
                   tempC={livePoint?.T1_C ?? 26.85}
-                  statusCaption={statusCaptions[phase]}
                   simulationMode={simulationMode}
                   launchToGate1Sec={launchToGate1Sec}
                   gate2ToFinishSec={gate2ToFinishSec}
