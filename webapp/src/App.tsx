@@ -1327,9 +1327,9 @@ export const App: React.FC = () => {
           ==================================================================== */}
       {route === 'student' ? (
         <main className="max-w-[1520px] w-full mx-auto px-4 sm:px-6 pt-2.5 pb-6 space-y-4 flex-1">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Left 7 Cols: Interactive Track on top, Balanced Leaderboard below */}
-            <div className="lg:col-span-7 flex flex-col gap-3.5 w-full">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+            {/* Left 7 Cols on desktop/laptops: Interactive Track on top, Balanced Leaderboard below */}
+            <div className="md:col-span-7 flex flex-col gap-3.5 w-full">
               {/* 1. Interactive Rounded-Rectangle Track Canvas */}
               <div className="flex w-full">
                 <CircularTrackCanvas
@@ -1567,7 +1567,7 @@ export const App: React.FC = () => {
 
             {/* Right 5 Cols: Focused, Low-Text Step-by-Step Mission Panel */}
             <div
-              className={`lg:col-span-5 p-6 sm:p-7 rounded-3xl border shadow-2xl flex flex-col justify-between min-h-[540px] transition-colors ${
+              className={`md:col-span-5 p-6 sm:p-7 rounded-3xl border shadow-2xl flex flex-col justify-between min-h-[540px] transition-colors ${
                 theme === 'dark'
                   ? 'bg-[#11182D] border-slate-800/90'
                   : 'bg-white border-slate-200 shadow-slate-200/50'
@@ -1685,6 +1685,18 @@ export const App: React.FC = () => {
                     <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
                     <span>Live Tracking: Autonomous line-following in progress...</span>
                   </div>
+
+                  {/* Manual Docking Advance / Safety Fallback Button */}
+                  <button
+                    type="button"
+                    onClick={handleDockAtChargerNow}
+                    className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-emerald-900/30 flex items-center justify-center gap-2 cursor-pointer transition transform hover:scale-[1.01] active:scale-[0.99]"
+                    title="If car is at charger or gate is open, click to begin supercharging game immediately"
+                  >
+                    <Zap className="w-4 h-4 fill-amber-300 text-amber-300" />
+                    <span>Car at Charger? Play Supercharger Game!</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
               )}
 

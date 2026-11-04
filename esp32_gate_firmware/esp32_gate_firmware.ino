@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
 #include "Config.h"
 #include "Ultrasonic.h"
 #include "LEDs.h"
@@ -25,6 +27,9 @@ unsigned long gate2OpenedAt = 0;
 bool gate2IsOpen = false;
 
 void setup() {
+  // Disable transient brownout reset from SG90 servo motor inrush spikes
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+
   Serial.begin(115200);
 
   ultrasonicInit();

@@ -311,12 +311,12 @@ export class Esp32GateClient {
     this.onStatusCallback = callbacks?.onStatus;
     this.onLogCallback = callbacks?.onLog;
 
-    // Orderly probe loop every 4.0s (only when WebSocket is not open)
+    // Orderly probe loop every 8.0s (only when WebSocket is not open)
     this.probeTimer = setInterval(() => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         void this.probe();
       }
-    }, 4000);
+    }, 8000);
   }
 
   public destroy() {

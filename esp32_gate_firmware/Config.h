@@ -39,7 +39,7 @@ const int SERVO_MIN_US                = 500;
 const int SERVO_MAX_US                = 2400;
 
 // Active travel hold window before cutting PWM train (allows physical swing, then detaches to eliminate jitter)
-const unsigned long SERVO_TRAVEL_MS   = 50; 
+const unsigned long SERVO_TRAVEL_MS   = 500; 
 
 // SoftAP Credentials
 const char* const AP_SSID             = "ESP32_Gate_Network";
