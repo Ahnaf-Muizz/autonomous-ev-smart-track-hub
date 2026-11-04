@@ -133,8 +133,73 @@ void updateLEDs(RobotState state, OperationalMode mode, int escapeDirectionSign)
     blinkToggle = !blinkToggle;
   }
 
-  // 1. PHYSICAL COLLISION & OBSTACLE HAZARD OVERRIDES
-  if (state == STATE_OBSTACLE_ALERT || state == STATE_COLLISION_ALERT) {
+  // ====================================================================
+  // 1. HOST / STEM DASHBOARD LED OVERRIDES (TOP PRIORITY)
+  //    Takes absolute precedence over obstacle sensors so that while the car
+  //    is parked at Gate 1, the charging dock, or Gate 2, the specific mission
+  //    LEDs (Cyan, Pulsing Green, Victory Green, or Fault Red) display cleanly!
+  // ====================================================================
+  if (activeOverride != LED_OVERRIDE_NONE) {
+    if (activeOverride == LED_OVERRIDE_CUSTOM) {
+      applyPodColors(customR, customG, customB, customR, customG, customB);
+      return;
+    }
+    if (activeOverride == LED_OVERRIDE_CYAN) {
+      applyPodColors(0, 200, 255, 0, 200, 255); // Solid Vibrant Cyan (Docked at Charger)
+      return;
+    }
+    if (activeOverride == LED_OVERRIDE_CHARGE) {
+      // Dynamic pulsing Green supercharging energy animation (25 FPS)
+      if (now - lastAnimMs >= 40) {
+        lastAnimMs = now;
+        uint8_t pulse = (uint8_t)(60 + 195 * (0.5 + 0.5 * sin(now / 150.0)));
+        applyPodColors(0, pulse, pulse / 5, 0, pulse, pulse / 5);
+      }
+      return;
+    }
+    if (activeOverride == LED_OVERRIDE_SUCCESS) {
+      // Solid bright Emerald Green for supercharging complete & victory sprint
+      applyPodColors(0, 255, 0, 0, 255, 0);
+      return;
+    }
+    if (activeOverride == LED_OVERRIDE_FAULT) {
+      // Rapid Red Alert blink on overheat or failed charge attempt
+      if (alertToggle) {
+        applyPodColors(255, 0, 0, 255, 0, 0);
+      } else {
+        applyPodColors(0, 0, 0, 0, 0, 0);
+      }
+      return;
+    }
+    if (activeOverride == LED_OVERRIDE_RAINBOW) {
+      if (now - lastAnimMs >= 40) {
+        lastAnimMs = now;
+        uint16_t hueL = (now / 6) % 360;
+        uint16_t hueR = (hueL + 180) % 360;
+        uint8_t lR, lG, lB, rR, rG, rB;
+        computeHueRGB(hueL, lR, lG, lB);
+        computeHueRGB(hueR, rR, rG, rB);
+        applyPodColors(lR, lG, lB, rR, rG, rB);
+      }
+      return;
+    }
+    if (activeOverride == LED_OVERRIDE_CYCLE) {
+      if (now - lastAnimMs >= 40) {
+        lastAnimMs = now;
+        uint16_t hue = (now / 15) % 360;
+        uint8_t r, g, b;
+        computeHueRGB(hue, r, g, b);
+        applyPodColors(r, g, b, r, g, b);
+      }
+      return;
+    }
+  }
+
+  // ====================================================================
+  // 2. PHYSICAL HAZARD INTERLOCKS
+  // ====================================================================
+  // Rear collision (physical bumper switch hit) is always a Red hazard flash
+  if (state == STATE_COLLISION_ALERT) {
     if (alertToggle) {
       applyPodColors(255, 0, 0, 255, 0, 0);
     } else {
@@ -143,41 +208,29 @@ void updateLEDs(RobotState state, OperationalMode mode, int escapeDirectionSign)
     return;
   }
 
-  // 2. GREEN COUNTDOWN DURING AUTO ARMING
-  if (state == STATE_LINE_FOLLOW_READY && activeOverride == LED_OVERRIDE_NONE) {
-    return;
-  }
-
-  // 3. HOST DASHBOARD LED OVERRIDES (Custom RGB, Cyan, Charge, Fault)
-  if (activeOverride != LED_OVERRIDE_NONE) {
-    if (activeOverride == LED_OVERRIDE_CUSTOM) {
-      applyPodColors(customR, customG, customB, customR, customG, customB);
-      return;
-    }
-    if (activeOverride == LED_OVERRIDE_CYAN) {
-      applyPodColors(0, 200, 255, 0, 200, 255);
-      return;
-    }
-    if (activeOverride == LED_OVERRIDE_FAULT) {
+  // Front obstacle: In MANUAL mode, flash Red alert.
+  // In AUTONOMOUS mode (Mode 1), arriving at Gate 1 or Gate 2 is a controlled checkpoint stop,
+  // NOT an error! Hold Solid Cyan headlights instead of flashing Red!
+  if (state == STATE_OBSTACLE_ALERT) {
+    if (mode == MODE_MANUAL) {
       if (alertToggle) {
         applyPodColors(255, 0, 0, 255, 0, 0);
       } else {
         applyPodColors(0, 0, 0, 0, 0, 0);
       }
       return;
-    }
-    if (activeOverride == LED_OVERRIDE_CHARGE) {
-      // Warm amber charging pulse - throttled to 25 FPS (40ms)
-      if (now - lastAnimMs >= 40) {
-        lastAnimMs = now;
-        uint8_t pulse = (uint8_t)(120 + 130 * (0.5 + 0.5 * sin(now / 180.0)));
-        applyPodColors(pulse, pulse / 2, 0, pulse, pulse / 2, 0);
-      }
+    } else {
+      applyPodColors(0, 200, 255, 0, 200, 255); // Solid Cyan at Gate 1 & Gate 2
       return;
     }
   }
 
-  // 4. BOUNDARY LINE ALERT FLASH (Single-sensor boundary edge trip)
+  // 3. GREEN COUNTDOWN DURING AUTO ARMING
+  if (state == STATE_LINE_FOLLOW_READY && activeOverride == LED_OVERRIDE_NONE) {
+    return;
+  }
+
+  // 4. BOUNDARY LINE ALERT FLASH (Single-sensor boundary edge trip in manual mode)
   if (state == STATE_LINE_ALERT) {
     if (alertToggle) {
       applyPodColors(255, 0, 0, 255, 0, 0);
@@ -187,7 +240,20 @@ void updateLEDs(RobotState state, OperationalMode mode, int escapeDirectionSign)
     return;
   }
 
-  // 5. TURNING / ROTATION / STRAFE: DEDICATED AMBER
+  // ====================================================================
+  // 5. AUTONOMOUS EV DRIVING (MODE 1): CONSTANT SOLID CYAN HEADLIGHTS
+  //    Cruising, steering, gentle rotations, or post-obstacle holds in Auto
+  //    ALL shine Solid Cyan. Amber turn signals are NEVER triggered in Auto!
+  // ====================================================================
+  if (mode == MODE_LINE_FOLLOWER) {
+    applyPodColors(0, 200, 255, 0, 200, 255); // Solid Vibrant Cyan
+    return;
+  }
+
+  // ====================================================================
+  // 6. MANUAL MODE (MODE 2): TELEOPERATION LIGHTING
+  // ====================================================================
+  // Turning / Strafe in Manual Mode: Dedicated Amber blinkers
   if (state == STATE_ROTATE_CCW || state == STATE_LEFT) {
     if (blinkToggle) {
       applyPodColors(255, 120, 0, 0, 0, 0); // Left Amber, Right OFF
@@ -206,37 +272,23 @@ void updateLEDs(RobotState state, OperationalMode mode, int escapeDirectionSign)
     return;
   }
 
-  // 6. FORWARD MOTION: SOLID WHITE IN MANUAL, SOLID CYAN IN AUTO
-  if (state == STATE_FORWARD || state == STATE_LINE_FOLLOWING || state == STATE_ESCAPING_LINE) {
-    if (mode == MODE_MANUAL) {
-      applyPodColors(255, 255, 255, 255, 255, 255); // Solid White
-    } else {
-      applyPodColors(0, 200, 255, 0, 200, 255);     // Solid Cyan
-    }
+  // Forward Motion: Solid White in Manual
+  if (state == STATE_FORWARD || state == STATE_ESCAPING_LINE) {
+    applyPodColors(255, 255, 255, 255, 255, 255); // Solid White
     return;
   }
 
-  // 7. REVERSE: SOLID RED
+  // Reverse: Solid Red
   if (state == STATE_BACKWARD) {
     applyPodColors(255, 0, 0, 255, 0, 0);
     return;
   }
 
-  // 8. POST-OBSTACLE PAUSE
-  if (state == STATE_LINE_FOLLOW_PAUSED) {
-    applyPodColors(255, 120, 0, 255, 120, 0);
-    return;
-  }
-
-  // 9. STANDBY IDLE (Solid for 3s, then Color Cycle Aura)
+  // Standby Idle in Manual (White for 3s, then Color Cycle Aura)
   if (state == STATE_STOPPED) {
     unsigned long idleDuration = now - stoppedSince;
     if (idleDuration < STANDBY_AURA_DELAY_MS) {
-      if (mode == MODE_MANUAL) {
-        applyPodColors(255, 255, 255, 255, 255, 255);
-      } else {
-        applyPodColors(0, 200, 255, 0, 200, 255);
-      }
+      applyPodColors(255, 255, 255, 255, 255, 255);
     } else {
       if (now - lastAnimMs >= 40) {
         lastAnimMs = now;

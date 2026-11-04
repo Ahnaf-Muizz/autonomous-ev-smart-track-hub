@@ -138,6 +138,8 @@ void loop() {
     }
   } else if (incomingChar == 'e' || incomingChar == 'E') {
     armFinishLineDetector();
+    setLEDOverride(LED_OVERRIDE_SUCCESS);
+    Serial.println(F(">>> [LED] Success & Finish Line Detector Armed!"));
     incomingChar = 0;
   } else if (incomingChar == 'c' || incomingChar == 'C') {
     setLEDOverride(LED_OVERRIDE_CYAN);

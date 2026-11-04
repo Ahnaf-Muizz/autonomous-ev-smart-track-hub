@@ -33,7 +33,7 @@ const unsigned long CLEARANCE_SETTLE_MS = 100; // Settle window before resuming 
 const unsigned long BLINK_INTERVAL          = 350;  // Amber turn signal cadence
 const unsigned long ALERT_BLINK_INTERVAL    = 150;  // Rapid red hazard flash
 const unsigned long ESCAPE_WINDOW_MS        = 1000; // 1.0s manual escape window
-const unsigned long OBSTACLE_CLEAR_DELAY_MS = 3000; // 3.0s hold after obstacle/gate clears in Auto
+const unsigned long OBSTACLE_CLEAR_DELAY_MS = 1500; // 1.5s hold after obstacle/gate clears in Auto
 const unsigned long STANDBY_AURA_DELAY_MS   = 3000; // 3.0s transition before idle color cycle
 
 // --- SYSTEM ENUMS ---
